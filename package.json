@@ -1,0 +1,21 @@
+{
+  "name": "prifly-ext-bluesky",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "A prifly extension: your Bluesky timeline, notifications, threads, profiles and search, and posts, replies and direct messages you confirm first.",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check ."
+  },
+  "dependencies": {
+    "@atproto/api": "^0.19.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@prifly/extension-api": "git+ssh://git@github.com/jimmy927/prifly-extension-api.git#v0.8.0",
+    "@types/bun": "^1.1.14",
+    "typescript": "^7.0.2"
+  }
+}

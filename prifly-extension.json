@@ -1,0 +1,18 @@
+{
+  "id": "bluesky",
+  "name": "Bluesky",
+  "description": "Your Bluesky in any prifly session: read your timeline, notifications, threads, profiles and search, and post, reply and send messages after you confirm each one.",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "prompt": "prompt.md",
+  "vault": ["bluesky"],
+  "settings": [
+    {
+      "id": "handle",
+      "label": "Your Bluesky handle",
+      "description": "For example you.bsky.social (no @). The app password goes in Settings -> Vault as an API token named \"bluesky\"; make one at https://bsky.app/settings/app-passwords.",
+      "type": "string",
+      "default": ""
+    }
+  ]
+}
