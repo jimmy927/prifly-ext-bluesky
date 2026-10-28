@@ -62,6 +62,16 @@ type Failure = {
   headers?: Record<string, string>;
 };
 
+/**
+ * Our own error, if that is what `error` is or wraps: the SDK catches whatever its fetch throws
+ * (our pacing gate included) and rethrows it as an XRPCError with the original as `cause`.
+ */
+function ownError(error: unknown): BlueskyError | undefined {
+  if (error instanceof BlueskyError) return error;
+  const cause = error instanceof Error ? error.cause : undefined;
+  return cause instanceof BlueskyError ? cause : undefined;
+}
+
 function failureOf(error: unknown): Failure {
   const e = (typeof error === "object" && error !== null ? error : {}) as Record<string, unknown>;
   const headers =
@@ -192,7 +202,8 @@ export class Bluesky {
 
   /** The reader-facing error for a failed call. */
   private explain(error: unknown): BlueskyError {
-    if (error instanceof BlueskyError) return error;
+    const ours = ownError(error);
+    if (ours !== undefined) return ours;
     const failure = failureOf(error);
     if (failure.status === 429) return new BlueskyError(rateLimited(failure, this.now()));
     if (/token scope/i.test(failure.message)) {
@@ -229,7 +240,7 @@ export class Bluesky {
       try {
         return await fn(agent);
       } catch (error) {
-        if (again && expired(failureOf(error)) && !(error instanceof BlueskyError)) {
+        if (again && expired(failureOf(error)) && ownError(error) === undefined) {
           again = false;
           this.live = null;
           continue;

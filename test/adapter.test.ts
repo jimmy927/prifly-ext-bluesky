@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The real SDK adapter (`atproto-agent.ts`) and the pacing in `client.ts`,
  * run against a fake `fetch` standing in for Bluesky's servers: nothing
  * leaves the process.
@@ -146,7 +146,10 @@ test("a rate-limit reset too far ahead is reported, not waited for", async () =>
   const sleeps: number[] = [];
   const h = await setup(fake, sleeps);
   await h.call("bluesky_timeline");
-  await expect(h.call("bluesky_timeline")).rejects.toThrow("Try again in about 10 minutes");
+  const message = await h.call("bluesky_timeline").catch((e: Error) => e.message);
+  expect(message).toStartWith("Bluesky's rate limit was reached.");
+  expect(message).toContain("Try again in about 10 minutes");
+  expect(message).not.toContain("network error");
   expect(sleeps).toEqual([]);
 });
 
