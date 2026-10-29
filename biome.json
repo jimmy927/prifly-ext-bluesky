@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/node_modules"]
+    "includes": ["**", "!**/node_modules", "!.prifly"]
   },
   "formatter": {
     "enabled": true,
