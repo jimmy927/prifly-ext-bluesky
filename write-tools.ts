@@ -154,7 +154,7 @@ async function sendPost(
     detected: await detectFacets(text, agent),
   }));
   const { target, detected } = prepared;
-  const me = cleanHandle(deps.handle());
+  const me = cleanHandle(await deps.handle());
   const where = target
     ? `reply to @${target.post.author.handle}: ${postUrl(target.ref.uri, target.post.author.handle)}`
     : "new post";
@@ -284,7 +284,7 @@ function dmTool(deps: ToolDeps): ExtensionTool {
         content: text,
         details: detailLines(
           detected,
-          `From: @${cleanHandle(deps.handle())}`,
+          `From: @${cleanHandle(await deps.handle())}`,
           `To: ${wanted} (${did})`,
           `Length: ${length} of ${DM_LIMIT} characters (graphemes)`,
         ),

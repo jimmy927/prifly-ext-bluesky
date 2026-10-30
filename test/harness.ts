@@ -109,6 +109,8 @@ export async function harness(
     confirm?: boolean;
     handle?: string;
     password?: string | null;
+    /** Further vault API-token entries, by name (`bluesky-handle`); `bluesky` overrides `password`. */
+    vault?: Record<string, string | null>;
     pacing?: Options["pacing"];
     makeAgent?: Options["makeAgent"];
   } = {},
@@ -120,7 +122,8 @@ export async function harness(
   });
   const password = options.password === undefined ? "abcd-efgh-ijkl-mnop" : options.password;
   const api: ExtensionApi = fake.api;
-  api.vault = { read: async (name) => (name === "bluesky" ? password : null) };
+  const entries: Record<string, string | null> = { bluesky: password, ...options.vault };
+  api.vault = { read: async (name) => entries[name] ?? null };
   const made = { agents: 0 };
   const stop = activate(api, {
     makeAgent:

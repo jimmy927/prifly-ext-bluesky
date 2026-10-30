@@ -47,8 +47,19 @@ mentions (the SDK's `RichText.detectFacets`).
 2. Add it to prifly's vault: Settings -> Vault, add an API token named
    `bluesky` whose value is the app password, and leave it at level 1 (the
    extension has no card of its own to ask on at the other levels).
-3. Open Settings -> Extensions -> Bluesky and type your handle, for example
-   `you.bsky.social`.
+3. Give it your handle (for example `you.bsky.social`) in the vault too, so
+   you never visit Settings. The extension looks for it in this order:
+   1. the `handle` setting in Settings -> Extensions -> Bluesky, when it is
+      not empty (an optional override);
+   2. a vault API token named `bluesky-handle` whose value is the handle (a
+      leading `@` is fine);
+   3. the `bluesky` token itself written as `<handle> <app-password>` or
+      `<handle>:<app-password>`. It is split only when the first part looks
+      like a handle (it has a dot, or starts with `did:`); a bare app password
+      (`xxxx-xxxx-xxxx-xxxx`) is used as it is.
+
+   Once signed in, the account's own handle is what the tools use, so
+   `bluesky_profile` with no actor is your profile.
 4. Link the folder into prifly's extensions folder and enable it in the
    Extensions dialog:
 
@@ -56,7 +67,9 @@ mentions (the SDK's `RichText.detectFacets`).
    ln -s ~/src/prifly-ext-bluesky ~/.local/share/prifly/extensions/bluesky
    ```
 
-Until 2 and 3 are done, every tool answers with these same steps. A wrong
+Until 2 is done, every tool answers with these steps; with the app password
+but no handle, it says to add the `bluesky-handle` token or set the handle in
+Settings. A wrong
 handle or app password is reported as that, and the extension tries again the
 next time you ask, so fixing the vault entry is enough.
 
@@ -71,14 +84,14 @@ next time you ask, so fixing the vault entry is enough.
 - Failures say what to do: not signed in, wrong app password, an app password
   without direct-message access, rate limit, network error, server error.
 - The status line in Settings -> Extensions shows `Bluesky as @handle`, or
-  that the handle and app password are still missing.
+  that the app password or the handle is still missing.
 
 ## Privacy
 
 - The app password lives in prifly's vault (the `bluesky` API-token entry,
-  read each time it is needed, and listed in the manifest's `vault`). It is
-  never in a setting, a file, a log or a tool's output. Only the handle, which
-  is public, is a setting.
+  read each time it is needed, and listed in the manifest's `vault`, as is
+  `bluesky-handle`). It is never in a setting, a file, a log or a tool's
+  output. The handle is public and may be a setting.
 - The extension talks only to Bluesky's servers (`bsky.social` and Bluesky's
   chat service, through your account's server) and only through Bluesky's
   official AT Protocol SDK, `@atproto/api`. No other service, no scraping, no
@@ -102,7 +115,7 @@ app password.
 
 | File                              | What it is                                                                                  |
 | --------------------------------- | ------------------------------------------------------------------------------------------- |
-| `prifly-extension.json`           | The manifest: id, the `handle` setting, the `bluesky` vault entry, `prompt.md`              |
+| `prifly-extension.json`           | The manifest: id, the `handle` setting, the `bluesky` and `bluesky-handle` vault entries, `prompt.md`            |
 | `prompt.md`                       | Instructions added to every session                                                         |
 | `index.ts`                        | `activate(api)`: reads the handle and app password, registers the eight tools               |
 | `client.ts`                       | Lazy login, session reuse, re-login on expiry, pacing, error messages                       |

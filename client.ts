@@ -17,14 +17,61 @@ export class BlueskyError extends Error {
   override name = "BlueskyError";
 }
 
+/** The vault entry (an API token) that holds the handle, for example `you.bsky.social`. */
+export const HANDLE_ENTRY = "bluesky-handle";
+
 export function notSignedIn(missing: string): string {
   return [
     `Not signed in to Bluesky: ${missing}.`,
     "To sign in:",
     `1. Create an app password at ${APP_PASSWORDS_URL} (Add App Password; tick "Allow access to your direct messages" if you want to send messages). Do not use your main password.`,
     `2. In prifly, open Settings -> Vault and add an API token named "${VAULT_ENTRY}" whose value is that app password (keep it at level 1).`,
-    "3. In prifly, open Settings -> Extensions -> Bluesky and type your handle (for example you.bsky.social).",
+    `3. Tell it your handle (for example you.bsky.social): add a second vault API token named "${HANDLE_ENTRY}" holding the handle, or type it in Settings -> Extensions -> Bluesky.`,
   ].join("\n");
+}
+
+/** The app password is there but no handle was found; says exactly how to give one. */
+export function noHandle(): string {
+  return [
+    "Not signed in to Bluesky: the app password is in the vault, but no handle was found.",
+    "To fix it, do either one:",
+    `- In prifly, open Settings -> Vault and add an API token named "${HANDLE_ENTRY}" whose value is your handle (for example you.bsky.social).`,
+    "- Or open Settings -> Extensions -> Bluesky and type your handle there.",
+  ].join("\n");
+}
+
+function looksLikeHandle(part: string): boolean {
+  return part.startsWith("did:") || part.includes(".");
+}
+
+/**
+ * Splits a combined token `<handle> <app-password>` or `<handle>:<app-password>`. Split only when
+ * the first part looks like a handle (a dot, or a DID) and a password remains; a bare app password
+ * or anything else is the password unchanged.
+ */
+export function splitToken(token: string): { handle: string | null; password: string } {
+  const value = token.trim();
+  const did = /^(did:[^\s:]+:[^\s:]+)[\s:]+(\S.*)$/.exec(value);
+  const plain = /^([^\s:]+)[\s:]+(\S.*)$/.exec(value);
+  const found = did ?? plain;
+  const first = found?.[1];
+  const rest = found?.[2];
+  if (first === undefined || rest === undefined || !looksLikeHandle(first)) {
+    return { handle: null, password: value };
+  }
+  return { handle: first.replace(/^@/, ""), password: rest.trim() };
+}
+
+/** The handle and password to sign in with: the setting, then `bluesky-handle`, then the combined token. */
+export function resolveSignIn(
+  setting: string,
+  handleToken: string | null,
+  token: string | null,
+): { handle: string; password: string | null } {
+  const clean = (s: string | null) => (s ?? "").trim().replace(/^@/, "");
+  const split = token === null || token.trim() === "" ? null : splitToken(token);
+  const handle = clean(setting) || clean(handleToken) || clean(split?.handle ?? null);
+  return { handle, password: split === null ? null : split.password };
 }
 
 export const WRONG_PASSWORD =
@@ -34,7 +81,7 @@ export const WRONG_PASSWORD =
 export type Credentials = { handle: string; password: string };
 
 export type ClientDeps = {
-  /** The handle (a setting) and the app password (the vault); empty when not set. */
+  /** The handle (empty when none is found) and the app password (null when not set), see `resolveSignIn`. */
   credentials: () => Promise<{ handle: string; password: string | null }>;
   /** Makes an agent whose HTTP requests go through `gate` and whose responses are shown to `observe`. */
   makeAgent: (hooks: AgentHooks) => AgentLike;
@@ -130,6 +177,7 @@ export function rateLimited(failure: Failure | { resetAt: number }, now: number)
 
 export class Bluesky {
   private live: { key: string; agent: Promise<AgentLike> } | null = null;
+  private signedInAs = "";
   private nextSlot = 0;
   private blockedUntil = 0;
   private readonly now: () => number;
@@ -168,7 +216,7 @@ export class Bluesky {
   private async login(credentials: Credentials): Promise<AgentLike> {
     const agent = this.deps.makeAgent({ gate: this.gate, observe: this.observe });
     try {
-      await agent.login(credentials.handle, credentials.password);
+      this.signedInAs = (await agent.login(credentials.handle, credentials.password)).handle;
     } catch (error) {
       const failure = failureOf(error);
       if (failure.status === 400 || failure.status === 401 || expired(failure)) {
@@ -183,10 +231,10 @@ export class Bluesky {
   private async session(): Promise<AgentLike> {
     const { handle, password } = await this.deps.credentials();
     const name = handle.trim().replace(/^@/, "");
-    if (name === "") throw new BlueskyError(notSignedIn("no handle is set"));
     if (password === null || password.trim() === "") {
       throw new BlueskyError(notSignedIn("no app password is in the vault"));
     }
+    if (name === "") throw new BlueskyError(noHandle());
     const key = `${name}\n${password}`;
     if (this.live?.key !== key) {
       this.live = { key, agent: this.login({ handle: name, password: password.trim() }) };
@@ -198,6 +246,12 @@ export class Bluesky {
       if (this.live === mine) this.live = null;
       throw error;
     }
+  }
+
+  /** The handle the session is signed in as (signs in first when needed). */
+  async me(): Promise<string> {
+    await this.run(async () => undefined);
+    return this.signedInAs;
   }
 
   /** The reader-facing error for a failed call. */

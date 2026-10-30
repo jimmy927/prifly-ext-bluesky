@@ -18,8 +18,8 @@ import { InputError, parseActor, resolvePostUri } from "./refs";
 export type ToolDeps = {
   api: () => ExtensionApi | null;
   bluesky: () => Bluesky;
-  /** The reader's handle from Settings; empty when not set. */
-  handle: () => string;
+  /** The handle the session is signed in as; signs in first, so it throws the not-signed-in message. */
+  handle: () => Promise<string>;
 };
 
 /** A string argument; with `required`, a missing or blank one is an error. */
@@ -143,7 +143,7 @@ export function readTools(deps: ToolDeps): ExtensionTool[] {
       },
       call: async (args) => {
         const given = stringArg(args, "actor", false);
-        const actor = given === undefined ? deps.handle() : parseActor(given);
+        const actor = given === undefined ? await deps.handle() : parseActor(given);
         const profile = await deps
           .bluesky()
           .run((agent) => agent.getProfile(actor.trim().replace(/^@/, "")));

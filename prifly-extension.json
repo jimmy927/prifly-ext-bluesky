@@ -5,12 +5,12 @@
   "version": "0.1.0",
   "main": "index.ts",
   "prompt": "prompt.md",
-  "vault": ["bluesky"],
+  "vault": ["bluesky", "bluesky-handle"],
   "settings": [
     {
       "id": "handle",
       "label": "Your Bluesky handle",
-      "description": "For example you.bsky.social (no @). The app password goes in Settings -> Vault as an API token named \"bluesky\"; make one at https://bsky.app/settings/app-passwords.",
+      "description": "Optional override, for example you.bsky.social (no @). Left empty, the handle is read from the Vault: an API token named \"bluesky-handle\" holding it, or \"<handle> <app password>\" in the \"bluesky\" token. The app password goes in Settings -> Vault as an API token named \"bluesky\"; make one at https://bsky.app/settings/app-passwords.",
       "type": "string",
       "default": ""
     }
