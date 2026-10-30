@@ -113,13 +113,13 @@ enough. The tests make no network calls and start no process. They cannot
 tell you that a real Bluesky account works; that needs a manual try with an
 app password.
 
-| File                              | What it is                                                                                  |
-| --------------------------------- | ------------------------------------------------------------------------------------------- |
-| `prifly-extension.json`           | The manifest: id, the `handle` setting, the `bluesky` and `bluesky-handle` vault entries, `prompt.md`            |
-| `prompt.md`                       | Instructions added to every session                                                         |
-| `index.ts`                        | `activate(api)`: reads the handle and app password, registers the eight tools               |
-| `client.ts`                       | Lazy login, session reuse, re-login on expiry, pacing, error messages                       |
-| `atproto-agent.ts`                | The only code that calls Bluesky: `@atproto/api` behind the small `AgentLike` in `types.ts` |
-| `read-tools.ts`, `write-tools.ts` | The five reads, and the three writes with their `api.confirm` cards                         |
-| `refs.ts`, `format.ts`            | Links, handles, graphemes and facets; the Markdown                                          |
-| `test/`                           | `fake-api.ts` (prifly's api), `harness.ts` (a fake agent), the tests                        |
+| File                              | What it is                                                                                            |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `prifly-extension.json`           | The manifest: id, the `handle` setting, the `bluesky` and `bluesky-handle` vault entries, `prompt.md` |
+| `prompt.md`                       | Instructions added to every session                                                                   |
+| `index.ts`                        | `activate(api)`: reads the handle and app password, registers the eight tools                         |
+| `client.ts`                       | Lazy login, session reuse, re-login on expiry, pacing, error messages                                 |
+| `atproto-agent.ts`                | The only code that calls Bluesky: `@atproto/api` behind the small `AgentLike` in `types.ts`           |
+| `read-tools.ts`, `write-tools.ts` | The five reads, and the three writes with their `api.confirm` cards                                   |
+| `refs.ts`, `format.ts`            | Links, handles, graphemes and facets; the Markdown                                                    |
+| `test/`                           | `fake-api.ts` (prifly's api), `harness.ts` (a fake agent), the tests                                  |
