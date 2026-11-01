@@ -7,8 +7,19 @@
  */
 
 import type { AppBskyRichtextFacet } from "@atproto/api";
+import type { ConfirmSpec } from "@prifly/extension-api";
 
 export type Facet = AppBskyRichtextFacet.Main;
+
+/** A picture shown on a confirm card. */
+export type CardImage = { mimeType: string; bytes: Uint8Array; name?: string };
+
+/**
+ * A confirm card with `images` (drawn on the card), which the published
+ * `@prifly/extension-api` does not declare yet. A prifly that does not know
+ * the field ignores it.
+ */
+export type CardSpec = ConfirmSpec & { images?: CardImage[] };
 
 export type Author = {
   did: string;

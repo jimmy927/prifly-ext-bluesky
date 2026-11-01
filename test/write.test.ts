@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { CardSpec } from "../types";
 import { CANCELLED, CANNOT_ASK } from "../write-tools";
 import { type Harness, harness, post, xrpcError } from "./harness";
 
@@ -134,6 +135,32 @@ test("post: images are read, shown on the card by file name with alt text, and u
   expect(request.images).toHaveLength(1);
   expect(request.images[0]).toMatchObject({ mime: "image/png", alt: "A grey cat" });
   expect(request.images[0]?.bytes.length).toBe(10);
+});
+
+test("post: the card carries the pictures in order, named by alt text or file name", async () => {
+  const h = await setup();
+  const first = picture("cat.png", 3);
+  const second = picture("dog.jpg", 5);
+  await h.call("bluesky_post", {
+    text: "pets",
+    images: [
+      { path: first, alt: "A grey cat" },
+      { path: second, alt: "" },
+    ],
+  });
+  const card = h.confirms[0] as CardSpec;
+  expect(card.images).toHaveLength(2);
+  expect(card.images?.[0]).toMatchObject({ mimeType: "image/png", name: "A grey cat" });
+  expect(card.images?.[0]?.bytes.length).toBe(3);
+  expect(card.images?.[1]).toMatchObject({ mimeType: "image/jpeg", name: "dog.jpg" });
+  expect(card.images?.[1]?.bytes.length).toBe(5);
+});
+
+test("post: a text-only card has no images field", async () => {
+  const h = await setup();
+  await h.call("bluesky_post", { text: "just words" });
+  expect(h.confirms[0]).toBeDefined();
+  expect("images" in (h.confirms[0] ?? {})).toBe(false);
 });
 
 test("post: more than 4 images is refused before the card", async () => {

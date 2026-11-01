@@ -25,7 +25,7 @@ import {
   resolveActor,
   resolvePostUri,
 } from "./refs";
-import type { AgentLike, NewImage, PostRef, PostView } from "./types";
+import type { AgentLike, CardSpec, NewImage, PostRef, PostView } from "./types";
 
 /** What a session is told when the reader said no: it must not try another way. */
 export const CANCELLED = "Not done: you cancelled";
@@ -131,13 +131,22 @@ function detailLines(detected: Detected, ...extra: string[]): string {
   return lines.join("\n");
 }
 
-async function ask(
-  api: ExtensionApi | null,
-  spec: Parameters<NonNullable<ExtensionApi["confirm"]>>[0],
-) {
-  const confirm = api?.confirm;
+async function ask(api: ExtensionApi | null, spec: CardSpec) {
+  const confirm = api?.confirm as ((spec: CardSpec) => Promise<boolean>) | undefined;
   if (confirm === undefined) return CANNOT_ASK;
   return (await confirm(spec)) ? null : CANCELLED;
+}
+
+/** The pictures of a post as the card's `images`, in order; nothing for a text-only post. */
+function cardImages(images: Attachment[]): Pick<CardSpec, "images"> {
+  if (images.length === 0) return {};
+  return {
+    images: images.map((i) => ({
+      mimeType: i.mime,
+      bytes: i.bytes,
+      name: i.alt === "" ? basename(i.path) : i.alt,
+    })),
+  };
 }
 
 /** Posts, and replies: a reply is a post with `replyTo`. */
@@ -183,6 +192,7 @@ async function sendPost(
           `Image ${n + 1}: ${basename(i.path)} (${i.path}), alt text: ${i.alt === "" ? "none" : JSON.stringify(i.alt)}`,
       ),
     ),
+    ...cardImages(images),
   });
   if (stopped !== null) return stopped;
   const created = await bluesky.run((agent) =>
