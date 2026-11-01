@@ -75,6 +75,9 @@ export function createAtprotoAgent(hooks: AgentHooks, options: AtprotoOptions = 
           : {}),
       });
     },
+    deletePost: async (uri) => {
+      await agent.deletePost(uri);
+    },
     sendDirectMessage: async (did, text, facets) => {
       const chat = agent.withProxy(CHAT_SERVICE_TYPE, CHAT_SERVICE_DID).chat.bsky.convo;
       const { data: found } = await chat.getConvoForMembers({ members: [did] });

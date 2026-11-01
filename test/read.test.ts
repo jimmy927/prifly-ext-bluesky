@@ -9,7 +9,7 @@ async function setup(options: Parameters<typeof harness>[0] = {}): Promise<Harne
   return current;
 }
 
-test("activate registers all eight tools", async () => {
+test("activate registers all nine tools", async () => {
   const h = await setup();
   expect(h.tools().map((tool) => tool.name)).toEqual([
     "bluesky_timeline",
@@ -20,6 +20,7 @@ test("activate registers all eight tools", async () => {
     "bluesky_post",
     "bluesky_reply",
     "bluesky_dm",
+    "bluesky_delete",
   ]);
   await new Promise((resolve) => setTimeout(resolve, 0)); // the status reads the vault first
   expect(h.statuses).toEqual(["Bluesky as @me.bsky.social"]);

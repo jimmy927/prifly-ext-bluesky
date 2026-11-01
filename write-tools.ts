@@ -1,6 +1,6 @@
 /**
- * The tools that send something: `bluesky_post`, `bluesky_reply`,
- * `bluesky_dm`. Each checks its input, looks up what it needs (the post
+ * The tools that send or remove something: `bluesky_post`, `bluesky_reply`,
+ * `bluesky_dm`, `bluesky_delete`. Each checks its input, looks up what it needs (the post
  * replied to, the recipient's DID, the facets), then asks the reader on an
  * `api.confirm` card showing the exact text and target, and sends only on
  * Confirm. Too long, too many images and unknown links fail before the card.
@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import { basename, extname, isAbsolute } from "node:path";
 import type { ExtensionApi, ExtensionTool } from "@prifly/extension-api";
 import type { Bluesky } from "./client";
+import { when } from "./format";
 import { stringArg, type ToolDeps } from "./read-tools";
 import {
   cleanHandle,
@@ -296,6 +297,67 @@ function dmTool(deps: ToolDeps): ExtensionTool {
   };
 }
 
+/** What is attached to the post, for the delete card. */
+function attachments(post: PostView): string {
+  const embed = (post.embed ?? {}) as { $type?: string; images?: unknown[]; media?: unknown };
+  const media = (embed.media ?? embed) as { images?: unknown[] };
+  const count = Array.isArray(media.images) ? media.images.length : 0;
+  if (count > 0) return `${count} image${count === 1 ? "" : "s"}`;
+  return embed.$type === undefined ? "none" : "an embed (link, video or quoted post)";
+}
+
+function deleteTool(deps: ToolDeps): ExtensionTool {
+  return {
+    name: "bluesky_delete",
+    description: `Deletes one of the reader's own Bluesky posts, named by its at:// URI or bsky.app link. One post per request. The reader sees a card with the post's exact text and the post is deleted only when they Confirm (it cannot be undone); when they cancel the tool answers "${CANCELLED}" and nothing is deleted. A post that is not the reader's own is refused before any card.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        post: {
+          type: "string",
+          description:
+            "The post to delete: its at:// URI or https://bsky.app/profile/<handle>/post/<id> link.",
+        },
+      },
+      required: ["post"],
+      additionalProperties: false,
+    },
+    call: async (args) => {
+      const input = stringArg(args, "post", true) ?? "";
+      const bluesky: Bluesky = deps.bluesky();
+      const { uri, post } = await bluesky.run(async (agent) => {
+        const found = await resolvePostUri(agent, input);
+        const [first] = await agent.getPosts([found]);
+        return { uri: found, post: first };
+      });
+      if (post === undefined) {
+        throw new InputError("That post no longer exists or was already deleted.");
+      }
+      const me = await bluesky.account();
+      if (post.author.did !== me.did) throw new InputError("You can only delete your own posts.");
+      const record = post.record as { text?: unknown; createdAt?: unknown; reply?: unknown } | null;
+      const link = postUrl(uri, me.handle);
+      const stopped = await ask(deps.api(), {
+        title: "Delete a Bluesky post",
+        summary: "Delete this Bluesky post?",
+        content: typeof record?.text === "string" ? record.text : "",
+        details: [
+          `Account: @${cleanHandle(me.handle)}`,
+          `Posted: ${when(typeof record?.createdAt === "string" ? record.createdAt : post.indexedAt)}`,
+          `Kind: ${record?.reply ? "a reply" : "a top-level post"}`,
+          `Images and embeds: ${attachments(post)}`,
+          `Link: ${link}`,
+          `Post: ${uri}`,
+          "This cannot be undone.",
+        ].join("\n"),
+      });
+      if (stopped !== null) return stopped;
+      await bluesky.run((agent) => agent.deletePost(uri));
+      return `Deleted. ${link}`;
+    },
+  };
+}
+
 export function writeTools(deps: ToolDeps): ExtensionTool[] {
-  return [postTool(deps), replyTool(deps), dmTool(deps)];
+  return [postTool(deps), replyTool(deps), dmTool(deps), deleteTool(deps)];
 }

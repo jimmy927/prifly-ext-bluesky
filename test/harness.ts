@@ -81,6 +81,7 @@ export function fakeAgent(script: Partial<AgentLike> = {}): FakeAgent {
       uri: "at://did:plc:me/app.bsky.feed.post/new1",
       cid: "newcid",
     }),
+    deletePost: async () => undefined,
     sendDirectMessage: async () => ({ convoId: "convo1", messageId: "msg1" }),
   };
   const merged = { ...defaults, ...script };

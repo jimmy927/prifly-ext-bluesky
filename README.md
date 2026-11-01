@@ -2,7 +2,7 @@
 
 A prifly extension that puts your Bluesky in any prifly session. Ask in plain
 words ("what's new on my timeline?", "any replies to my last post?", "reply
-to that and say thanks") and the session answers through eight tools. You
+to that and say thanks") and the session answers through nine tools. You
 launch nothing and open no panel.
 
 | Tool                    | What it does                                                                                                | Asks you first |
@@ -15,6 +15,7 @@ launch nothing and open no panel.
 | `bluesky_post`          | A post of up to 300 characters, optionally a reply, with up to 4 images from local files and their alt text | yes            |
 | `bluesky_reply`         | A reply to a post, with the thread's root and parent set correctly                                          | yes            |
 | `bluesky_dm`            | A direct message (chat) to a handle                                                                         | yes            |
+| `bluesky_delete`        | Deletes one of your own posts, from an `at://` URI or a `bsky.app/profile/<handle>/post/<id>` link          | yes            |
 
 Answers are Markdown: the author's name and `@handle`, the time, the post's
 text (quoted, because it is somebody else's words), counts, the post's
@@ -23,6 +24,13 @@ cursor for the next page. An empty timeline, notifications or search says "No
 posts..." / "No notifications." rather than answering nothing.
 
 ## Every write asks first
+
+`bluesky_delete` removes one post of yours per request. It looks the post up
+first: a post that is gone ("That post no longer exists or was already
+deleted") or that someone else wrote ("You can only delete your own posts") is
+refused before any card. Otherwise the card shows the post's exact text, its
+date, whether it is a reply, its images or embeds and its bsky.app link, and
+says it cannot be undone; the post is deleted only on Confirm.
 
 `bluesky_post`, `bluesky_reply` and `bluesky_dm` show you a card with the
 exact text and the target (who the message goes to, which post a reply is
@@ -117,9 +125,9 @@ app password.
 | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `prifly-extension.json`           | The manifest: id, the `handle` setting, the `bluesky` and `bluesky-handle` vault entries, `prompt.md` |
 | `prompt.md`                       | Instructions added to every session                                                                   |
-| `index.ts`                        | `activate(api)`: reads the handle and app password, registers the eight tools                         |
+| `index.ts`                        | `activate(api)`: reads the handle and app password, registers the nine tools                          |
 | `client.ts`                       | Lazy login, session reuse, re-login on expiry, pacing, error messages                                 |
 | `atproto-agent.ts`                | The only code that calls Bluesky: `@atproto/api` behind the small `AgentLike` in `types.ts`           |
-| `read-tools.ts`, `write-tools.ts` | The five reads, and the three writes with their `api.confirm` cards                                   |
+| `read-tools.ts`, `write-tools.ts` | The five reads, and the four writes with their `api.confirm` cards                                    |
 | `refs.ts`, `format.ts`            | Links, handles, graphemes and facets; the Markdown                                                    |
 | `test/`                           | `fake-api.ts` (prifly's api), `harness.ts` (a fake agent), the tests                                  |

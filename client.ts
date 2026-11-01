@@ -178,6 +178,7 @@ export function rateLimited(failure: Failure | { resetAt: number }, now: number)
 export class Bluesky {
   private live: { key: string; agent: Promise<AgentLike> } | null = null;
   private signedInAs = "";
+  private signedInDid = "";
   private nextSlot = 0;
   private blockedUntil = 0;
   private readonly now: () => number;
@@ -216,7 +217,9 @@ export class Bluesky {
   private async login(credentials: Credentials): Promise<AgentLike> {
     const agent = this.deps.makeAgent({ gate: this.gate, observe: this.observe });
     try {
-      this.signedInAs = (await agent.login(credentials.handle, credentials.password)).handle;
+      const session = await agent.login(credentials.handle, credentials.password);
+      this.signedInAs = session.handle;
+      this.signedInDid = session.did;
     } catch (error) {
       const failure = failureOf(error);
       if (failure.status === 400 || failure.status === 401 || expired(failure)) {
@@ -252,6 +255,12 @@ export class Bluesky {
   async me(): Promise<string> {
     await this.run(async () => undefined);
     return this.signedInAs;
+  }
+
+  /** The account the session is signed in as (signs in first when needed). */
+  async account(): Promise<{ did: string; handle: string }> {
+    await this.run(async () => undefined);
+    return { did: this.signedInDid, handle: this.signedInAs };
   }
 
   /** The reader-facing error for a failed call. */

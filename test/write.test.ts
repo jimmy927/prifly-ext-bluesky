@@ -304,3 +304,87 @@ test("dm: a message over 1000 graphemes is refused; an app password without chat
     "Allow access to your direct messages",
   );
 });
+
+const MINE_URI = "at://did:plc:me/app.bsky.feed.post/mine1";
+const mine = () =>
+  post(1, {
+    uri: MINE_URI,
+    author: { did: "did:plc:me", handle: "me.bsky.social" },
+    text: "Oops, wrong post",
+  });
+
+test("delete: the card shows the exact text and cannot-be-undone, and Confirm deletes that URI", async () => {
+  const h = await setup({ script: { getPosts: async () => [mine()] } });
+  expect(await h.call("bluesky_delete", { post: MINE_URI })).toBe(
+    "Deleted. https://bsky.app/profile/me.bsky.social/post/mine1",
+  );
+  expect(h.confirms).toHaveLength(1);
+  expect(h.confirms[0]).toMatchObject({
+    summary: "Delete this Bluesky post?",
+    content: "Oops, wrong post",
+  });
+  expect(h.confirms[0]?.details).toContain("This cannot be undone.");
+  expect(h.confirms[0]?.details).toContain("2026-10-28 12:30 UTC");
+  expect(h.confirms[0]?.details).toContain("https://bsky.app/profile/me.bsky.social/post/mine1");
+  expect(sent(h, "deletePost").map((c) => c.args)).toEqual([[MINE_URI]]);
+});
+
+test('delete: cancelling answers exactly "Not done: you cancelled" and deletes nothing', async () => {
+  const h = await setup({ confirm: false, script: { getPosts: async () => [mine()] } });
+  expect(await h.call("bluesky_delete", { post: MINE_URI })).toBe("Not done: you cancelled");
+  expect(h.confirms).toHaveLength(1);
+  expect(sent(h, "deletePost")).toEqual([]);
+});
+
+test("delete: someone else's post is refused before any card", async () => {
+  const h = await setup(); // the default fake post belongs to user1
+  await expect(
+    h.call("bluesky_delete", { post: "at://did:plc:user1/app.bsky.feed.post/rkey1" }),
+  ).rejects.toThrow("You can only delete your own posts");
+  expect(h.confirms).toEqual([]);
+  expect(sent(h, "deletePost")).toEqual([]);
+});
+
+test("delete: a post that is gone gives the clear error before any card", async () => {
+  const h = await setup({ script: { getPosts: async () => [] } });
+  await expect(h.call("bluesky_delete", { post: MINE_URI })).rejects.toThrow(
+    "That post no longer exists or was already deleted",
+  );
+  expect(h.confirms).toEqual([]);
+  expect(sent(h, "deletePost")).toEqual([]);
+});
+
+test("delete: a bsky.app link works, resolving the handle to the DID", async () => {
+  const h = await setup({
+    script: { resolveHandle: async () => "did:plc:me", getPosts: async () => [mine()] },
+  });
+  await h.call("bluesky_delete", { post: "https://bsky.app/profile/me.bsky.social/post/mine1" });
+  expect(sent(h, "getPosts")[0]?.args).toEqual([[MINE_URI]]);
+  expect(sent(h, "deletePost").map((c) => c.args)).toEqual([[MINE_URI]]);
+});
+
+test("delete: not signed in fails before any card; a bad link is refused", async () => {
+  const h = await setup({ password: null });
+  await expect(h.call("bluesky_delete", { post: MINE_URI })).rejects.toThrow("Not signed in");
+  expect(h.confirms).toEqual([]);
+  const g = await setup();
+  await expect(g.call("bluesky_delete", { post: "https://example.com/x" })).rejects.toThrow(
+    "is not a Bluesky post",
+  );
+  expect(g.confirms).toEqual([]);
+});
+
+test("delete: an expired session logs in again and still deletes", async () => {
+  let deletes = 0;
+  const h = await setup({
+    script: {
+      getPosts: async () => [mine()],
+      deletePost: async () => {
+        deletes += 1;
+        if (deletes === 1) throw xrpcError(400, "ExpiredToken", "Token has expired");
+      },
+    },
+  });
+  expect(await h.call("bluesky_delete", { post: MINE_URI })).toStartWith("Deleted.");
+  expect(deletes).toBe(2);
+});

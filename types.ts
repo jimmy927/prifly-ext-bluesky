@@ -107,6 +107,8 @@ export type AgentLike = {
   resolveHandle(handle: string): Promise<string>;
   /** Uploads any images, then creates the post. */
   createPost(post: NewPost): Promise<PostRef>;
+  /** Deletes one of the signed-in account's own posts, by its at:// URI. */
+  deletePost(uri: string): Promise<void>;
   /** Opens (or finds) the conversation with `did` and sends one message in it. */
   sendDirectMessage(
     did: string,
