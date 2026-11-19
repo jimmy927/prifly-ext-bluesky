@@ -9,35 +9,30 @@
 import type { AgentLike } from "./types";
 
 export const APP_PASSWORDS_URL = "https://bsky.app/settings/app-passwords";
-/** The vault entry (an API token) that holds the app password; the manifest's `vault` list names it. */
-export const VAULT_ENTRY = "bluesky";
-
 /** What a session is told when Bluesky cannot be used; thrown, so the tool call is an error with this text. */
 export class BlueskyError extends Error {
   override name = "BlueskyError";
 }
 
-/** The vault entry (an API token) that holds the handle, for example `you.bsky.social`. */
-export const HANDLE_ENTRY = "bluesky-handle";
+/** What to tell a reader with no app password; the status line and every tool answer use it. */
+export const SIGN_IN_STEPS = `Make an app password at ${APP_PASSWORDS_URL} and enter it with your handle in Settings -> Extensions -> Bluesky.`;
 
-export function notSignedIn(missing: string): string {
+export function notSignedIn(): string {
   return [
-    `Not signed in to Bluesky: ${missing}.`,
-    "To sign in:",
-    `1. Create an app password at ${APP_PASSWORDS_URL} (Add App Password; tick "Allow access to your direct messages" if you want to send messages). Do not use your main password.`,
-    `2. In prifly, open Settings -> Vault and add an API token named "${VAULT_ENTRY}" whose value is that app password (keep it at level 1).`,
-    `3. Tell it your handle (for example you.bsky.social): add a second vault API token named "${HANDLE_ENTRY}" holding the handle, or type it in Settings -> Extensions -> Bluesky.`,
+    "Not signed in to Bluesky: no app password is set.",
+    SIGN_IN_STEPS,
+    'Tick "Allow access to your direct messages" when you make it if you want to send messages. Do not use your main password.',
   ].join("\n");
 }
 
 /** The app password is there but no handle was found; says exactly how to give one. */
 export function noHandle(): string {
-  return [
-    "Not signed in to Bluesky: the app password is in the vault, but no handle was found.",
-    "To fix it, do either one:",
-    `- In prifly, open Settings -> Vault and add an API token named "${HANDLE_ENTRY}" whose value is your handle (for example you.bsky.social).`,
-    "- Or open Settings -> Extensions -> Bluesky and type your handle there.",
-  ].join("\n");
+  return "Not signed in to Bluesky: an app password is set, but no handle. Enter your handle (for example you.bsky.social) in Settings -> Extensions -> Bluesky.";
+}
+
+/** Prifly is too old to keep the extension's own secrets. */
+export function noSecretsApi(): string {
+  return "Not signed in to Bluesky: this version of prifly cannot keep the extension's app password. Update prifly, then enter the app password and your handle in Settings -> Extensions -> Bluesky.";
 }
 
 function looksLikeHandle(part: string): boolean {
@@ -62,27 +57,15 @@ export function splitToken(token: string): { handle: string | null; password: st
   return { handle: first.replace(/^@/, ""), password: rest.trim() };
 }
 
-/** The handle and password to sign in with: the setting, then `bluesky-handle`, then the combined token. */
-export function resolveSignIn(
-  setting: string,
-  handleToken: string | null,
-  token: string | null,
-): { handle: string; password: string | null } {
-  const clean = (s: string | null) => (s ?? "").trim().replace(/^@/, "");
-  const split = token === null || token.trim() === "" ? null : splitToken(token);
-  const handle = clean(setting) || clean(handleToken) || clean(split?.handle ?? null);
-  return { handle, password: split === null ? null : split.password };
-}
-
 export const WRONG_PASSWORD =
   `Bluesky refused the sign-in: the handle or app password is wrong. Check the handle in Settings -> Extensions -> Bluesky, and make a new app password at ${APP_PASSWORDS_URL} ` +
-  `if needed, then replace the "${VAULT_ENTRY}" entry in Settings -> Vault. (Use an app password, not your main password.)`;
+  "if needed, then enter it in the same place. (Use an app password, not your main password.)";
 
 export type Credentials = { handle: string; password: string };
 
 export type ClientDeps = {
-  /** The handle (empty when none is found) and the app password (null when not set), see `resolveSignIn`. */
-  credentials: () => Promise<{ handle: string; password: string | null }>;
+  /** The handle (empty when none is found) and the app password (null when not set), see `signIn`. */
+  credentials: () => Promise<{ handle: string; password: string | null; noSecrets?: boolean }>;
   /** Makes an agent whose HTTP requests go through `gate` and whose responses are shown to `observe`. */
   makeAgent: (hooks: AgentHooks) => AgentLike;
   /** The smallest gap between two requests. */
@@ -232,11 +215,10 @@ export class Bluesky {
 
   /** The logged-in agent: made and logged in on first use, again when the credentials change. */
   private async session(): Promise<AgentLike> {
-    const { handle, password } = await this.deps.credentials();
+    const { handle, password, noSecrets } = await this.deps.credentials();
     const name = handle.trim().replace(/^@/, "");
-    if (password === null || password.trim() === "") {
-      throw new BlueskyError(notSignedIn("no app password is in the vault"));
-    }
+    if (noSecrets === true) throw new BlueskyError(noSecretsApi());
+    if (password === null || password.trim() === "") throw new BlueskyError(notSignedIn());
     if (name === "") throw new BlueskyError(noHandle());
     const key = `${name}\n${password}`;
     if (this.live?.key !== key) {
@@ -271,7 +253,7 @@ export class Bluesky {
     if (failure.status === 429) return new BlueskyError(rateLimited(failure, this.now()));
     if (/token scope/i.test(failure.message)) {
       return new BlueskyError(
-        `Bluesky refused this: the app password does not allow it (${failure.message}). Make a new app password at ${APP_PASSWORDS_URL} with "Allow access to your direct messages" ticked, and put it in the "${VAULT_ENTRY}" vault entry.`,
+        `Bluesky refused this: the app password does not allow it (${failure.message}). Make a new app password at ${APP_PASSWORDS_URL} with "Allow access to your direct messages" ticked, and enter it in Settings -> Extensions -> Bluesky.`,
       );
     }
     if (failure.status === undefined || failure.status < 100) {
@@ -286,7 +268,7 @@ export class Bluesky {
     }
     if (expired(failure)) {
       return new BlueskyError(
-        `Bluesky kept refusing the session (${failure.message}). Check the handle and the "${VAULT_ENTRY}" app password.`,
+        `Bluesky kept refusing the session (${failure.message}). Check the handle and the app password in Settings -> Extensions -> Bluesky.`,
       );
     }
     return new BlueskyError(`Bluesky said no: ${failure.message}`);

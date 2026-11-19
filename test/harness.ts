@@ -1,8 +1,8 @@
 /**
  * Test fakes: a fake AT Protocol agent (`AgentLike`) that records its calls
  * and answers from a script, post builders, and `harness`, which activates the
- * extension over prifly's fake api with that agent, a vault holding the app
- * password and the handle setting. No network, no process.
+ * extension over prifly's fake api with that agent, the extension's secrets
+ * holding the app password, an optional old-style vault and the handle setting. No network, no process.
  */
 
 import type { ExtensionApi } from "@prifly/extension-api";
@@ -102,6 +102,8 @@ export type Harness = ReturnType<typeof fakeApi> & {
   call: (name: string, args?: Record<string, unknown>) => Promise<string>;
   stop: () => void;
   made: { agents: number };
+  /** Every vault entry the extension read, in order. */
+  vaultReads: string[];
 };
 
 export async function harness(
@@ -110,21 +112,36 @@ export async function harness(
     confirm?: boolean;
     handle?: string;
     password?: string | null;
-    /** Further vault API-token entries, by name (`bluesky-handle`); `bluesky` overrides `password`. */
+    /** A prifly without `api.secrets`. */
+    noSecrets?: boolean;
+    /** Other secrets by key (`handle`); `appPassword` overrides `password`. */
+    secrets?: Record<string, string>;
+    /** The reader's old vault API-token entries (`bluesky`, `bluesky-handle`); read only to migrate. */
     vault?: Record<string, string | null>;
     pacing?: Options["pacing"];
     makeAgent?: Options["makeAgent"];
   } = {},
 ): Promise<Harness> {
   const agent = fakeAgent(options.script);
+  const password = options.password === undefined ? "abcd-efgh-ijkl-mnop" : options.password;
   const fake = fakeApi({
     settings: { handle: options.handle ?? ME.handle },
+    ...(options.noSecrets === true
+      ? {}
+      : {
+          secrets: { ...(password === null ? {} : { appPassword: password }), ...options.secrets },
+        }),
     ...(options.confirm === undefined ? {} : { confirm: options.confirm }),
   });
-  const password = options.password === undefined ? "abcd-efgh-ijkl-mnop" : options.password;
   const api: ExtensionApi = fake.api;
-  const entries: Record<string, string | null> = { bluesky: password, ...options.vault };
-  api.vault = { read: async (name) => entries[name] ?? null };
+  const vaultReads: string[] = [];
+  const entries: Record<string, string | null> = { ...options.vault };
+  api.vault = {
+    read: async (name) => {
+      vaultReads.push(name);
+      return entries[name] ?? null;
+    },
+  };
   const made = { agents: 0 };
   const stop = activate(api, {
     makeAgent:
@@ -135,5 +152,12 @@ export async function harness(
       }),
     pacing: options.pacing ?? { minGapMs: 0, sleep: async () => undefined },
   });
-  return { ...fake, agent, call: (name, args = {}) => fake.callTool(name, args), stop, made };
+  return {
+    ...fake,
+    agent,
+    call: (name, args = {}) => fake.callTool(name, args),
+    stop,
+    made,
+    vaultReads,
+  };
 }

@@ -9,7 +9,7 @@
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.14",
-        "@prifly/extension-api": "git+ssh://git@github.com/jimmy927/prifly-extension-api.git#v0.8.0",
+        "@prifly/extension-api": "git+ssh://git@github.com/jimmy927/prifly-extension-api.git#v0.15.0",
         "@types/bun": "^1.1.14",
         "typescript": "^7.0.2",
       },
@@ -52,7 +52,7 @@
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.6.3", "", { "os": "win32", "cpu": "x64" }, "sha512-GhtOPphBWlnCepqpNk/w5eGN5oGRCzL20EbAkL1XCIpyboeVC9R642noyT43l8LSenGS4qz9IL8sKPfwY37V/Q=="],
 
-    "@prifly/extension-api": ["@prifly/extension-api@git+ssh://git@github.com/jimmy927/prifly-extension-api.git#40313cc35a7a9bf3300ee7e22ae38881e581fcfb", {}, "40313cc35a7a9bf3300ee7e22ae38881e581fcfb"],
+    "@prifly/extension-api": ["@prifly/extension-api@git+ssh://git@github.com/jimmy927/prifly-extension-api.git#09391d32ffb3c504486acbdcc16aa098b50fffad", {}, "09391d32ffb3c504486acbdcc16aa098b50fffad"],
 
     "@types/bun": ["@types/bun@1.4.4", "", { "dependencies": { "bun-types": "1.4.4" } }, "sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ=="],
 

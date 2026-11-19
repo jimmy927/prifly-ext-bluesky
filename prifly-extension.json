@@ -8,9 +8,16 @@
   "vault": ["bluesky", "bluesky-handle"],
   "settings": [
     {
+      "id": "appPassword",
+      "label": "App password",
+      "description": "Make one at https://bsky.app/settings/app-passwords.",
+      "type": "secret",
+      "default": false
+    },
+    {
       "id": "handle",
       "label": "Your Bluesky handle",
-      "description": "Optional override, for example you.bsky.social (no @). Left empty, the handle is read from the Vault: an API token named \"bluesky-handle\" holding it, or \"<handle> <app password>\" in the \"bluesky\" token. The app password goes in Settings -> Vault as an API token named \"bluesky\"; make one at https://bsky.app/settings/app-passwords.",
+      "description": "Your handle, for example you.bsky.social (no @).",
       "type": "string",
       "default": ""
     }

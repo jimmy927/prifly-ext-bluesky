@@ -230,6 +230,8 @@ export type FakeApi = {
   statuses: string[];
   /** What `api.state` holds. */
   documents: Map<string, unknown>;
+  /** What `api.secrets` holds, by key. */
+  secrets: Map<string, string>;
 };
 
 /**
@@ -241,6 +243,8 @@ export function fakeApi(
   options: {
     connections?: ExtensionConnectionsApi;
     settings?: SettingValues;
+    /** What `api.secrets` starts with; leave out for a fake prifly without secrets. */
+    secrets?: Record<string, string>;
     folder?: string;
     confirm?: boolean;
   } = {},
@@ -250,7 +254,9 @@ export function fakeApi(
   /** The session of the tool call running now, as prifly knows it for `api.confirm`. */
   let calling: string | null = null;
   const { state, documents } = fakeState();
+  const secrets = new Map(Object.entries(options.secrets ?? {}));
   const fake: Omit<FakeApi, "api" | "tools" | "callTool"> = {
+    secrets,
     shown: [],
     flags: new Map(),
     notices: [],
@@ -270,8 +276,23 @@ export function fakeApi(
       "state",
       "confirm",
       "status",
+      "secrets",
+      "setting-secret",
     ],
     state,
+    ...(options.secrets === undefined
+      ? {}
+      : {
+          secrets: {
+            get: async (key) => secrets.get(key) ?? null,
+            set: async (key, value) => {
+              if (value === null) secrets.delete(key);
+              else secrets.set(key, value);
+            },
+            keys: async (prefix = "") =>
+              [...secrets.keys()].filter((k) => k.startsWith(prefix)).sort(),
+          },
+        }),
     confirm: async (spec) => {
       fake.confirms.push({ ...spec, session: spec.sessionId ?? calling });
       return options.confirm ?? true;
@@ -307,6 +328,7 @@ export function fakeApi(
     start: async () => ({ started: false, reason: "A fake api starts no session." }),
     snooze: () => undefined,
     dialog: async () => null,
+    git: async () => ({ code: 1, out: "", err: "A fake api runs no git." }),
   };
   const callTool: FakeApi["callTool"] = async (name, args, pick = null) => {
     const tool = tools.find((each) => each.name === name);

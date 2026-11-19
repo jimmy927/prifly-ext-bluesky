@@ -22,7 +22,7 @@ test("activate registers all nine tools", async () => {
     "bluesky_dm",
     "bluesky_delete",
   ]);
-  await new Promise((resolve) => setTimeout(resolve, 0)); // the status reads the vault first
+  await new Promise((resolve) => setTimeout(resolve, 0)); // the status reads the secrets first
   expect(h.statuses).toEqual(["Bluesky as @me.bsky.social"]);
 });
 
@@ -197,87 +197,143 @@ test("the session logs in once and is reused", async () => {
   ]);
 });
 
-test("not signed in: no app password says exactly how to add it", async () => {
+test("not signed in: no app password anywhere says to enter it in Settings -> Extensions -> Bluesky", async () => {
   const h = await setup({ password: null });
   const error = await h.call("bluesky_timeline").catch((e: Error) => e);
   expect(error).toBeInstanceOf(Error);
   const message = (error as Error).message;
-  expect(message).toContain("Not signed in to Bluesky: no app password is in the vault");
-  expect(message).toContain("https://bsky.app/settings/app-passwords");
-  expect(message).toContain('Settings -> Vault and add an API token named "bluesky"');
-  expect(message).toContain("Settings -> Extensions -> Bluesky");
+  expect(message).toContain("Not signed in to Bluesky: no app password is set");
+  expect(message).toContain(
+    "Make an app password at https://bsky.app/settings/app-passwords and enter it with your handle in Settings -> Extensions -> Bluesky.",
+  );
+  expect(message).not.toContain("Vault");
+  expect(message).not.toContain("vault");
   expect(h.agent.calls).toEqual([]);
 });
 
-test("not signed in: a bare app password and no handle anywhere says how to add the handle", async () => {
+test("the status line says the same when there is no app password", async () => {
+  const h = await setup({ password: null });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(h.statuses).toHaveLength(1);
+  expect(h.statuses[0]).toContain("https://bsky.app/settings/app-passwords");
+  expect(h.statuses[0]).toContain("Settings -> Extensions -> Bluesky");
+  expect(h.statuses[0]).not.toMatch(/vault/i);
+});
+
+test("not signed in: an app password and no handle anywhere says to enter the handle", async () => {
   const h = await setup({ handle: "" });
   const error = await h.call("bluesky_timeline").catch((e: Error) => e);
   const message = (error as Error).message;
-  expect(message).toContain("the app password is in the vault, but no handle was found");
-  expect(message).toContain('API token named "bluesky-handle"');
+  expect(message).toContain("an app password is set, but no handle");
   expect(message).toContain("Settings -> Extensions -> Bluesky");
+  expect(message).not.toMatch(/vault/i);
   expect(h.agent.calls).toEqual([]);
+});
+
+test("a prifly without secrets says to update it", async () => {
+  const h = await setup({ noSecrets: true });
+  await expect(h.call("bluesky_timeline")).rejects.toThrow("Update prifly");
+  expect(h.vaultReads).toEqual([]);
 });
 
 const PASSWORD = "abcd-efgh-ijkl-mnop";
 
-test("handle: the setting wins over the vault entries", async () => {
+function loginArgs(h: Harness): unknown[] | undefined {
+  return h.agent.calls.find((c) => c.method === "login")?.args;
+}
+
+test("secrets set: used, and the vault is never read", async () => {
+  const h = await setup({ vault: { bluesky: "old", "bluesky-handle": "old.bsky.social" } });
+  await h.call("bluesky_timeline");
+  expect(loginArgs(h)).toEqual([ME.handle, PASSWORD]);
+  expect(h.vaultReads).toEqual([]);
+});
+
+test("migration: a bare vault app password is copied into the secrets and used", async () => {
+  const h = await setup({ password: null, vault: { bluesky: ` ${PASSWORD}\n` } });
+  await h.call("bluesky_timeline");
+  expect(h.secrets.get("appPassword")).toBe(PASSWORD);
+  expect(loginArgs(h)).toEqual([ME.handle, PASSWORD]);
+  expect(h.logs.map((l) => l.event)).toContain(
+    "copied bluesky from the vault into this extension's secrets",
+  );
+});
+
+test("migration: a combined vault token gives the password and the handle", async () => {
   const h = await setup({
-    handle: "@set.bsky.social",
-    vault: { "bluesky-handle": "entry.bsky.social", bluesky: `tok.bsky.social ${PASSWORD}` },
+    password: null,
+    handle: "",
+    vault: { bluesky: `alice.bsky.social ${PASSWORD}` },
   });
   await h.call("bluesky_timeline");
-  expect(h.agent.calls.find((c) => c.method === "login")?.args).toEqual([
-    "set.bsky.social",
-    PASSWORD,
-  ]);
+  expect(h.secrets.get("appPassword")).toBe(PASSWORD);
+  expect(h.secrets.get("handle")).toBe("alice.bsky.social");
+  expect(loginArgs(h)).toEqual(["alice.bsky.social", PASSWORD]);
 });
 
-test("handle: from the bluesky-handle vault entry, a leading @ allowed", async () => {
+test("migration: a colon, a leading @ and a DID split the combined token too", async () => {
+  const colon = await setup({
+    password: null,
+    handle: "",
+    vault: { bluesky: `@jimmy927.bsky.social:${PASSWORD}` },
+  });
+  await colon.call("bluesky_timeline");
+  expect(loginArgs(colon)).toEqual(["jimmy927.bsky.social", PASSWORD]);
+  const did = await setup({
+    password: null,
+    handle: "",
+    vault: { bluesky: `did:plc:abc123:${PASSWORD}` },
+  });
+  await did.call("bluesky_timeline");
+  expect(loginArgs(did)).toEqual(["did:plc:abc123", PASSWORD]);
+});
+
+test("migration: a combined-looking token whose first part is not a handle is not split", async () => {
+  const h = await setup({ password: null, handle: "", vault: { bluesky: "abcd efgh ijkl mnop" } });
+  await expect(h.call("bluesky_timeline")).rejects.toThrow("no handle");
+  expect(h.secrets.get("appPassword")).toBe("abcd efgh ijkl mnop");
+  expect(h.secrets.has("handle")).toBe(false);
+});
+
+test("migration: the bluesky-handle vault entry is copied into the secrets, a leading @ allowed", async () => {
   const h = await setup({ handle: "", vault: { "bluesky-handle": " @jimmy927.bsky.social \n" } });
   await h.call("bluesky_timeline");
-  expect(h.agent.calls.find((c) => c.method === "login")?.args).toEqual([
-    "jimmy927.bsky.social",
-    PASSWORD,
-  ]);
+  expect(h.secrets.get("handle")).toBe("jimmy927.bsky.social");
+  expect(loginArgs(h)).toEqual(["jimmy927.bsky.social", PASSWORD]);
+  expect(new Set(h.vaultReads)).toEqual(new Set(["bluesky-handle"]));
 });
 
-test("handle: from the combined token, split at a space", async () => {
-  const h = await setup({ handle: "", password: `jimmy927.bsky.social ${PASSWORD}` });
+test("migration: after the copy the vault is not needed again", async () => {
+  const h = await setup({
+    password: null,
+    handle: "",
+    vault: { bluesky: `a.bsky.social ${PASSWORD}` },
+  });
   await h.call("bluesky_timeline");
-  expect(h.agent.calls.find((c) => c.method === "login")?.args).toEqual([
-    "jimmy927.bsky.social",
-    PASSWORD,
-  ]);
-});
-
-test("handle: from the combined token, split at a colon", async () => {
-  const h = await setup({ handle: "", password: `@jimmy927.bsky.social:${PASSWORD}` });
+  const reads = h.vaultReads.length;
   await h.call("bluesky_timeline");
-  expect(h.agent.calls.find((c) => c.method === "login")?.args).toEqual([
-    "jimmy927.bsky.social",
-    PASSWORD,
-  ]);
+  expect(h.vaultReads).toHaveLength(reads);
 });
 
-test("handle: a DID in the combined token is split too", async () => {
-  const h = await setup({ handle: "", password: `did:plc:abc123:${PASSWORD}` });
+test("migration: the status line says the old vault entries can be removed", async () => {
+  const h = await setup({ password: null, vault: { bluesky: PASSWORD } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(h.statuses.at(-1)).toBe(
+    "Bluesky as @me.bsky.social. Copied from the Vault: you can now remove the old bluesky entries in the Vault dialog.",
+  );
+});
+
+test("handle: the setting wins over the secrets handle", async () => {
+  const h = await setup({ handle: "@set.bsky.social", secrets: { handle: "stored.bsky.social" } });
   await h.call("bluesky_timeline");
-  expect(h.agent.calls.find((c) => c.method === "login")?.args).toEqual([
-    "did:plc:abc123",
-    PASSWORD,
-  ]);
+  expect(loginArgs(h)).toEqual(["set.bsky.social", PASSWORD]);
 });
 
-test("handle: a combined-looking token whose first part is not a handle is not split", async () => {
-  const h = await setup({ handle: "", password: "abcd efgh ijkl mnop" });
-  await expect(h.call("bluesky_timeline")).rejects.toThrow("no handle was found");
-  const withHandle = await setup({ password: "abcd efgh ijkl mnop" });
-  await withHandle.call("bluesky_timeline");
-  expect(withHandle.agent.calls.find((c) => c.method === "login")?.args).toEqual([
-    ME.handle,
-    "abcd efgh ijkl mnop",
-  ]);
+test("handle: with no setting, the secrets handle is used without reading the vault", async () => {
+  const h = await setup({ handle: "", secrets: { handle: "stored.bsky.social" } });
+  await h.call("bluesky_timeline");
+  expect(loginArgs(h)).toEqual(["stored.bsky.social", PASSWORD]);
+  expect(h.vaultReads).toEqual([]);
 });
 
 test("profile with no actor is the session's own account, whatever gave the handle", async () => {
