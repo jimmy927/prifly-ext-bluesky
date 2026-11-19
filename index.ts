@@ -1,5 +1,5 @@
 /**
- * The Bluesky extension: what prifly imports. `activate` registers the eight
+ * The Bluesky extension: what prifly imports. `activate` registers the nine
  * tools. The app password is the `appPassword` secret field and the handle the
  * `handle` setting (see credentials.ts, which also copies an old vault entry
  * into the extension's secrets). Both are read each time they are needed and

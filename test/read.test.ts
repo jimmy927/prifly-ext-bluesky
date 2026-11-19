@@ -315,6 +315,18 @@ test("migration: after the copy the vault is not needed again", async () => {
   expect(h.vaultReads).toHaveLength(reads);
 });
 
+test("migration happens once: a cleared app password is not copied back from the vault", async () => {
+  const h = await setup({ password: null, vault: { bluesky: PASSWORD } });
+  await h.call("bluesky_timeline");
+  expect(h.secrets.get("appPassword")).toBe(PASSWORD);
+  h.secrets.delete("appPassword");
+  const reads = h.vaultReads.length;
+  const error = await h.call("bluesky_timeline").catch((e: Error) => e);
+  expect((error as Error).message).toContain("no app password is set");
+  expect(h.vaultReads).toHaveLength(reads);
+  expect(h.secrets.has("appPassword")).toBe(false);
+});
+
 test("migration: the status line says the old vault entries can be removed", async () => {
   const h = await setup({ password: null, vault: { bluesky: PASSWORD } });
   await new Promise((resolve) => setTimeout(resolve, 0));

@@ -77,7 +77,11 @@ first time a value is needed it is copied into the extension's secrets (a
 `bluesky-handle` entry, or the handle in front of a combined token, becomes
 the stored handle), one line is logged, and the status line says the old
 entries can now be removed in the Vault dialog. The `handle` setting, when not
-empty, wins over a stored handle. The vault is read only for this copy. The
+empty, wins over a stored handle; a migrated handle is not shown in Settings,
+so fill in the `handle` setting if you want to change who it signs in as. The
+copy happens once (a `vaultMigrated` marker is kept in the secrets): clearing
+the app password later does not bring the old vault entry back. The vault is
+read only for this copy. The
 manifest's `vault` list (`bluesky`, `bluesky-handle`) exists only for it and
 goes in a later release.
 

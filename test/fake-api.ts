@@ -276,8 +276,7 @@ export function fakeApi(
       "state",
       "confirm",
       "status",
-      "secrets",
-      "setting-secret",
+      ...(options.secrets === undefined ? [] : ["secrets", "setting-secret"]),
     ],
     state,
     ...(options.secrets === undefined

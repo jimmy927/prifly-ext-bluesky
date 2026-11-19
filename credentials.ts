@@ -18,6 +18,8 @@ export const VAULT_HANDLE = "bluesky-handle";
 /** The secret keys: `appPassword` is the settings field, `handle` the migrated handle. */
 const PASSWORD_KEY = "appPassword";
 const HANDLE_KEY = "handle";
+/** Set the first time `signIn` runs, so the vault is looked at once only. */
+const MIGRATED_KEY = "vaultMigrated";
 
 export type SignIn = {
   /** Empty when none is found. */
@@ -62,28 +64,48 @@ export async function signIn(api: ExtensionApi | null): Promise<SignIn> {
   const setting = api.settings?.["handle"];
   let handle = typeof setting === "string" ? clean(setting) : "";
 
+  // The vault is looked at once only: a reader who later clears a field is not given the old
+  // entry back. A marker that cannot be read counts as set.
+  const mayMigrate = (await api.secrets.get(MIGRATED_KEY).catch(() => "unreadable")) === null;
+
   let password = await stored(api, PASSWORD_KEY);
-  if (password === "") {
-    const token = await vaultToken(api, VAULT_PASSWORD);
-    if (token !== null) {
-      const split = splitToken(token);
-      password = split.password;
-      await store(api, PASSWORD_KEY, password);
-      if (split.handle !== null) await store(api, HANDLE_KEY, split.handle);
-      api.log("copied bluesky from the vault into this extension's secrets");
+  if (mayMigrate && password === "") {
+    const copied = await copyPassword(api);
+    if (copied !== null) {
+      password = copied;
       migrated = true;
     }
   }
 
   if (handle === "") handle = clean(await stored(api, HANDLE_KEY));
-  if (handle === "") {
-    const token = await vaultToken(api, VAULT_HANDLE);
-    if (token !== null) {
-      handle = clean(token);
-      await store(api, HANDLE_KEY, handle);
-      api.log("copied bluesky-handle from the vault into this extension's secrets");
+  if (mayMigrate && handle === "") {
+    const copied = await copyHandle(api);
+    if (copied !== null) {
+      handle = copied;
       migrated = true;
     }
   }
+  if (mayMigrate) await store(api, MIGRATED_KEY, "1");
   return { handle, password: password === "" ? null : password, migrated, noSecrets: false };
+}
+
+/** Copies the vault's `bluesky` entry (a bare password or `<handle> <password>`) into the secrets. */
+async function copyPassword(api: ExtensionApi): Promise<string | null> {
+  const token = await vaultToken(api, VAULT_PASSWORD);
+  if (token === null) return null;
+  const split = splitToken(token);
+  await store(api, PASSWORD_KEY, split.password);
+  if (split.handle !== null) await store(api, HANDLE_KEY, split.handle);
+  api.log("copied bluesky from the vault into this extension's secrets");
+  return split.password;
+}
+
+/** Copies the vault's `bluesky-handle` entry into the secrets. */
+async function copyHandle(api: ExtensionApi): Promise<string | null> {
+  const token = await vaultToken(api, VAULT_HANDLE);
+  if (token === null) return null;
+  const handle = clean(token);
+  await store(api, HANDLE_KEY, handle);
+  api.log("copied bluesky-handle from the vault into this extension's secrets");
+  return handle;
 }
